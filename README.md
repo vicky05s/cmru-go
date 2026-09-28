@@ -1,4 +1,4 @@
-blha blha hahdlhlahflfh # cmru_go
+# cmru_go
 
 A new Flutter project.
 
