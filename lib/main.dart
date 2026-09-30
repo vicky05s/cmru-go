@@ -97,24 +97,54 @@ class Course {
 
 // ============================== HELPERS =============================
 /// Rounded card with subtle border + shadow and ink-well tap.
-Widget appCard({required Widget child, VoidCallback? onTap, EdgeInsets padding = const EdgeInsets.all(16)}) {
-  return Card(
-    margin: EdgeInsets.zero,
-    elevation: 3,
-    color: Colors.white,
-    surfaceTintColor: Colors.transparent,
-    shadowColor: C.teal.withOpacity(0.25),
-    clipBehavior: Clip.antiAlias,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(18),
-      side: const BorderSide(color: C.border),
+/// Reusable Container-based card.
+/// Container requirements demonstrated here:
+/// - margin
+/// - padding
+/// - alignment
+/// - BoxConstraints
+/// - BoxDecoration
+/// - border
+/// - border radius
+/// - box shadow
+/// - InkWell interaction
+Widget appCard({
+  required Widget child,
+  VoidCallback? onTap,
+  EdgeInsets padding = const EdgeInsets.all(16),
+}) {
+  return Container(
+    margin: const EdgeInsets.only(bottom: 2),
+    constraints: const BoxConstraints(
+      minHeight: 70,
     ),
-    child: InkWell(
-      onTap: onTap,
-      hoverColor: C.tealLight.withOpacity(0.45),
-      splashColor: C.tealLight,
-      highlightColor: C.tealLight.withOpacity(0.5),
-      child: Padding(padding: padding, child: Align(alignment: Alignment.centerLeft, child: child)),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: C.border),
+      boxShadow: [
+        BoxShadow(
+          color: C.teal.withOpacity(0.12),
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        hoverColor: C.tealLight.withOpacity(0.45),
+        splashColor: C.tealLight,
+        highlightColor: C.tealLight.withOpacity(0.5),
+        child: Container(
+          width: double.infinity,
+          padding: padding,
+          alignment: Alignment.centerLeft,
+          child: child,
+        ),
+      ),
     ),
   );
 }
@@ -239,6 +269,8 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   // page: 0 Home, 1 Events, 2 Profile, 3 Academics, 4 Assignments, 5 Courses, 6 Campus Services
   int get _page => widget.page;
+  // Selected previous semester for the Academics dropdown.
+  int _selectedAcademicSemester = 6;
   bool get _announcementOpen => AppData.i.announcementOpen;
   set _announcementOpen(bool v) => AppData.i.announcementOpen = v;
   int get _notifications => AppData.i.notifications;
@@ -364,12 +396,16 @@ class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       appBar: _appBar(w),
       drawer: _drawer(),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1240),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: KeyedSubtree(key: ValueKey(_page), child: _body()),
+      // SafeArea keeps the existing pages clear of system UI while
+      // each page remains scrollable through its existing ListView.
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1240),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              child: KeyedSubtree(key: ValueKey(_page), child: _body()),
+            ),
           ),
         ),
       ),
@@ -611,6 +647,15 @@ class _HomeShellState extends State<HomeShell> {
         const SizedBox(height: 16),
         _hero(cw),
         const SizedBox(height: 16),
+
+        // ==========================================================
+        // CONTAINER WIDGET DASHBOARD
+        // These are deliberately visible Container widgets for the
+        // new Container assignment.
+        // ==========================================================
+        _containerDashboardSection(cw),
+
+        const SizedBox(height: 16),
         grid(cw, [_attendanceCard(), _assignmentsCard(), _upcomingClassCard()], cols3, minH: 165),
         const SizedBox(height: 14),
         grid(cw, [_announcementCard(), _upcomingEventsCard()], cols2, minH: 205),
@@ -619,6 +664,194 @@ class _HomeShellState extends State<HomeShell> {
         const SizedBox(height: 90),
       ]);
     });
+  }
+
+  // ================================================================
+  // CONTAINER ASSIGNMENT SECTION
+  // ================================================================
+  Widget _containerDashboardSection(double cw) {
+    final cards = [
+      _containerInfoCard(
+        icon: Icons.school_rounded,
+        title: 'Programme',
+        value: 'B.Tech. CSE',
+        subtitle: 'Semester 7',
+        color: C.teal,
+      ),
+      _containerInfoCard(
+        icon: Icons.credit_score_rounded,
+        title: 'Credits',
+        value: '18 / 24',
+        subtitle: 'Current semester',
+        color: const Color(0xFF3B82F6),
+      ),
+      _containerInfoCard(
+        icon: Icons.percent_rounded,
+        title: 'Attendance',
+        value: '87%',
+        subtitle: 'On track',
+        color: C.orange,
+      ),
+      _containerInfoCard(
+        icon: Icons.assignment_turned_in_rounded,
+        title: 'Assignments',
+        value: '$_pending',
+        subtitle: 'Pending submission',
+        color: const Color(0xFF8B5CF6),
+      ),
+    ];
+
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(
+        minHeight: 170,
+      ),
+      padding: const EdgeInsets.all(18),
+      alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: C.border,
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: C.teal.withOpacity(0.10),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Student Snapshot',
+            style: TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              color: C.navy,
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 720
+                  ? 4
+                  : constraints.maxWidth >= 430
+                      ? 2
+                      : 1;
+
+              return grid(
+                constraints.maxWidth,
+                cards,
+                columns,
+                gap: 10,
+                minH: 140,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _containerInfoCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required String subtitle,
+    required Color color,
+  }) {
+    return Container(
+      width: double.infinity,
+      height: 140,
+      padding: const EdgeInsets.all(14),
+      alignment: Alignment.centerLeft,
+      constraints: const BoxConstraints(
+        minWidth: 130,
+        minHeight: 110,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FCFC),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(
+          color: color.withOpacity(0.28),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.08),
+            blurRadius: 7,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(17),
+          hoverColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          splashColor: color.withOpacity(0.10),
+          onTap: () {
+            _snack(
+              '$title selected: $value',
+              icon: icon,
+            );
+          },
+          child: SizedBox(
+            width: double.infinity,
+            height: double.infinity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: 21,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: C.muted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 17,
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    color: C.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _greeting(double cw) {
@@ -831,12 +1064,12 @@ class _HomeShellState extends State<HomeShell> {
         const SizedBox(height: 12),
         const Text('CMRU Tech Fest 2025', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: C.navy)),
         const SizedBox(height: 4),
-        const Text('Registrations are open. Join us for innovation, creativity and fun with the CMRU community.', style: T.body),
+        const Text('Registrations are open. Join us for innovation, creativity and fun with the CMRU community. Registration closes: 15 October 2025.', style: T.body),
         if (_announcementOpen)
           const Padding(
             padding: EdgeInsets.only(top: 8),
             child: Text(
-                'Three days of hackathons, project showcases, cultural nights and guest talks at Lakeside Campus. Form your team and register through Student Affairs.',
+                'Three days of hackathons, project showcases, cultural nights and guest talks at Lakeside Campus. Form your team and register through Student Affairs. Registration closes: 15 October 2025.',
                 style: T.muted),
           ),
         const SizedBox(height: 10),
@@ -908,11 +1141,31 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _quickAccess(double cw) {
     final cards = _serviceCards();
-    final head = Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: const [
-      Text('Quick Access', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: C.navy)),
-      SizedBox(height: 4),
-      Text('Everything you need, in one place.', style: T.muted),
-    ]);
+
+    // Container used as a simple section header: padding + alignment.
+    final head = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      alignment: Alignment.centerLeft,
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Quick Access',
+            style: TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+              color: C.navy,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Everything you need, in one place.',
+            style: T.muted,
+          ),
+        ],
+      ),
+    );
     final quote = Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -957,24 +1210,44 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   List<Widget> _serviceCards() {
-    Widget card(IconData icon, String t, String s, Color c, VoidCallback tap) => appCard(
-      onTap: tap,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        iconBox(icon, color: c, size: 44),
-        const SizedBox(height: 12),
-        Text(t, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: C.navy)),
-        const SizedBox(height: 2),
-        Text(s, maxLines: 1, overflow: TextOverflow.ellipsis, style: T.muted),
-      ]),
-    );
     return [
-      card(Icons.library_books_rounded, 'Library', 'Explore resources', C.teal,
-              () => _snack('Opening Library.', icon: Icons.library_books_rounded)),
-      card(Icons.calendar_month_rounded, 'Timetable', 'View class schedule', const Color(0xFF3B82F6),
-              () => _snack('Opening Timetable.', icon: Icons.calendar_month_rounded)),
-      card(Icons.school_rounded, 'My Courses', 'Access materials', C.orange, () => _go(5)),
-      card(Icons.location_on_rounded, 'Campus Map', 'Navigate campus', const Color(0xFF8B5CF6),
-              () => _snack('Opening Campus Map.', icon: Icons.location_on_rounded)),
+      CampusActionCard(
+        icon: Icons.library_books_rounded,
+        title: 'Library',
+        subtitle: 'Explore resources',
+        color: C.teal,
+        onTap: () => _snack(
+          'Opening Library.',
+          icon: Icons.library_books_rounded,
+        ),
+      ),
+      CampusActionCard(
+        icon: Icons.calendar_month_rounded,
+        title: 'Timetable',
+        subtitle: 'View class schedule',
+        color: const Color(0xFF3B82F6),
+        onTap: () => _snack(
+          'Opening Timetable.',
+          icon: Icons.calendar_month_rounded,
+        ),
+      ),
+      CampusActionCard(
+        icon: Icons.school_rounded,
+        title: 'My Courses',
+        subtitle: 'Access materials',
+        color: C.orange,
+        onTap: () => _go(5),
+      ),
+      CampusActionCard(
+        icon: Icons.location_on_rounded,
+        title: 'Campus Map',
+        subtitle: 'Navigate campus',
+        color: const Color(0xFF8B5CF6),
+        onTap: () => _snack(
+          'Opening Campus Map.',
+          icon: Icons.location_on_rounded,
+        ),
+      ),
     ];
   }
 
@@ -1152,29 +1425,254 @@ class _HomeShellState extends State<HomeShell> {
       final pad = box.maxWidth >= 700 ? 24.0 : 16.0;
       final cw = box.maxWidth - pad * 2;
       final cols = cw >= 900 ? 3 : (cw >= 600 ? 2 : 1);
-      return ListView(padding: EdgeInsets.all(pad), children: [
-        const Text('Academics', style: T.h1),
-        const SizedBox(height: 12),
-        appCard(
-          child: Row(children: [
-            iconBox(Icons.school_rounded, size: 54),
-            const SizedBox(width: 16),
-            const Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                Text('Semester 7 • Section D', style: T.h2),
-                SizedBox(height: 2),
-                Text('B.Tech. Computer Science Engineering', style: T.body),
-                SizedBox(height: 2),
-                Text('USN: 23BBTCS199', style: T.muted),
-              ]),
+
+      // Semester 1-6 academic data.
+      // Replace these sample values with the student's actual transcript values.
+      const semesterData = <int, Map<String, String>>{
+        1: {'gpa': '3.42', 'cgpa': '3.42', 'credits': '20', 'attendance': '88%'},
+        2: {'gpa': '3.58', 'cgpa': '3.50', 'credits': '22', 'attendance': '89%'},
+        3: {'gpa': '3.64', 'cgpa': '3.55', 'credits': '21', 'attendance': '91%'},
+        4: {'gpa': '3.71', 'cgpa': '3.59', 'credits': '22', 'attendance': '90%'},
+        5: {'gpa': '3.76', 'cgpa': '3.62', 'credits': '20', 'attendance': '92%'},
+        6: {'gpa': '3.81', 'cgpa': '3.65', 'credits': '21', 'attendance': '91%'},
+      };
+
+      final selected = semesterData[_selectedAcademicSemester]!;
+
+      return ListView(
+        padding: EdgeInsets.all(pad),
+        children: [
+          const Text('Academics', style: T.h1),
+          const SizedBox(height: 12),
+
+          // Existing student/semester Container.
+          appCard(
+            child: Row(children: [
+              iconBox(Icons.school_rounded, size: 54),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Semester 7 • Section D', style: T.h2),
+                    SizedBox(height: 2),
+                    Text(
+                      'B.Tech. Computer Science Engineering',
+                      style: T.body,
+                    ),
+                    SizedBox(height: 2),
+                    Text('USN: 23BBTCS199', style: T.muted),
+                  ],
+                ),
+              ),
+            ]),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ========================================================
+          // SEMESTER DROPDOWN
+          // ========================================================
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
             ),
-          ]),
-        ),
-        sectionTitle('Courses this semester'),
-        grid(cw, _courses.map(_courseCard).toList(), cols),
-        const SizedBox(height: 90),
-      ]);
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: C.border),
+              boxShadow: [
+                BoxShadow(
+                  color: C.teal.withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: C.tealLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.history_edu_rounded,
+                    color: C.tealDark,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Previous Semester',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: C.navy,
+                    ),
+                  ),
+                ),
+                DropdownButton<int>(
+                  value: _selectedAcademicSemester,
+                  underline: const SizedBox(),
+                  borderRadius: BorderRadius.circular(14),
+                  items: List.generate(
+                    6,
+                    (index) => DropdownMenuItem<int>(
+                      value: index + 1,
+                      child: Text('Semester ${index + 1}'),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _selectedAcademicSemester = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          // ========================================================
+          // GPA / CGPA / CREDITS / ATTENDANCE
+          // ========================================================
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: C.border),
+              boxShadow: [
+                BoxShadow(
+                  color: C.teal.withOpacity(0.08),
+                  blurRadius: 9,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Semester ${_selectedAcademicSemester} Academic Performance',
+                  style: T.h2,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _academicMetricContainer(
+                      'GPA',
+                      selected['gpa']!,
+                      Icons.grade_rounded,
+                      C.teal,
+                    ),
+                    _academicMetricContainer(
+                      'CGPA',
+                      selected['cgpa']!,
+                      Icons.auto_graph_rounded,
+                      const Color(0xFF3B82F6),
+                    ),
+                    _academicMetricContainer(
+                      'Credits',
+                      selected['credits']!,
+                      Icons.menu_book_rounded,
+                      C.orange,
+                    ),
+                    _academicMetricContainer(
+                      'Attendance',
+                      selected['attendance']!,
+                      Icons.fact_check_rounded,
+                      const Color(0xFF8B5CF6),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 18),
+          sectionTitle('Courses this semester'),
+          grid(cw, _courses.map(_courseCard).toList(), cols),
+          const SizedBox(height: 90),
+        ],
+      );
     });
+  }
+
+  Widget _academicMetricContainer(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Container(
+      width: 150,
+      height: 92,
+      padding: const EdgeInsets.all(12),
+      alignment: Alignment.centerLeft,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(
+          color: color.withOpacity(0.25),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 19,
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: C.muted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 17,
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _courseCard(Course c) {
@@ -1330,6 +1828,100 @@ class _HomeShellState extends State<HomeShell> {
         const SizedBox(height: 90),
       ]);
     });
+  }
+}
+
+// ====================== REUSABLE CONTAINER WIDGET =====================
+/// Reusable campus-service Container.
+///
+/// This is intentionally a Container-based widget for the new assignment.
+/// It demonstrates explicit height, padding, alignment, constraints,
+/// BoxDecoration, border, border radius, shadow and InkWell feedback.
+class CampusActionCard extends StatelessWidget {
+  const CampusActionCard({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 125,
+      constraints: const BoxConstraints(
+        minWidth: 130,
+        maxWidth: 260,
+      ),
+      padding: const EdgeInsets.all(14),
+      alignment: Alignment.topLeft,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: C.border),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.10),
+            blurRadius: 7,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            width: double.infinity,
+            height: double.infinity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: 22,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    color: C.navy,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: T.muted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
