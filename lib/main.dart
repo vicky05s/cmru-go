@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 
 void main() => runApp(const CmruGoApp());
@@ -54,6 +55,7 @@ class CmruGoApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: C.teal, primary: C.teal),
+        materialTapTargetSize: MaterialTapTargetSize.padded,
         scaffoldBackgroundColor: C.mint,
         appBarTheme: const AppBarTheme(backgroundColor: Colors.white, foregroundColor: C.navy),
       ),
@@ -254,8 +256,9 @@ const Map<String, int> kRoutes = {
   '/assignments': 4,
   '/courses': 5,
   '/services': 6,
+  '/service-request': 7,
 };
-const List<String> kRouteNames = ['/', '/events', '/profile', '/academics', '/assignments', '/courses', '/services'];
+const List<String> kRouteNames = ['/', '/events', '/profile', '/academics', '/assignments', '/courses', '/services', '/service-request'];
 
 // ============================== SHELL ===============================
 class HomeShell extends StatefulWidget {
@@ -314,7 +317,7 @@ class _HomeShellState extends State<HomeShell> {
   int get _registered => _events.where((e) => e.registered).length;
   int get _favs => _events.where((e) => e.fav).length;
 
-  static const _titles = ['Home', 'Events', 'Profile', 'Academics', 'Assignments', 'Courses', 'Campus Services'];
+  static const _titles = ['Home', 'Events', 'Profile', 'Academics', 'Assignments', 'Courses', 'Campus Services', 'Service Request'];
 
   // ------------------------- actions -------------------------
   void _go(int i) {
@@ -409,7 +412,9 @@ class _HomeShellState extends State<HomeShell> {
           ),
         ),
       ),
-      floatingActionButton: w >= 600
+      floatingActionButton: _page == 7
+          ? null
+          : w >= 600
           ? FloatingActionButton.extended(
         onPressed: _addAssignment,
         tooltip: 'Add Assignment',
@@ -460,6 +465,8 @@ class _HomeShellState extends State<HomeShell> {
         return _coursesPage();
       case 6:
         return _servicesPage();
+      case 7:
+        return const CampusServiceRequestPage();
       default:
         return _homePage();
     }
@@ -613,6 +620,7 @@ class _HomeShellState extends State<HomeShell> {
             item(Icons.event_rounded, 'Events', 1),
             item(Icons.menu_book_rounded, 'Courses', 5),
             item(Icons.dashboard_customize_rounded, 'Campus Services', 6),
+            item(Icons.assignment_rounded, 'Service Request Form', 7),
             item(Icons.person_rounded, 'Profile', 2),
             const Divider(height: 14, indent: 20, endIndent: 20),
             extra(Icons.rocket_launch_rounded, 'LEAP', 'Opening LEAP programme.'),
@@ -741,8 +749,8 @@ class _HomeShellState extends State<HomeShell> {
               final columns = constraints.maxWidth >= 720
                   ? 4
                   : constraints.maxWidth >= 430
-                      ? 2
-                      : 1;
+                  ? 2
+                  : 1;
 
               return grid(
                 constraints.maxWidth,
@@ -1523,7 +1531,7 @@ class _HomeShellState extends State<HomeShell> {
                   borderRadius: BorderRadius.circular(14),
                   items: List.generate(
                     6,
-                    (index) => DropdownMenuItem<int>(
+                        (index) => DropdownMenuItem<int>(
                       value: index + 1,
                       child: Text('Semester ${index + 1}'),
                     ),
@@ -1611,11 +1619,11 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Widget _academicMetricContainer(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
+      String label,
+      String value,
+      IconData icon,
+      Color color,
+      ) {
     return Container(
       width: 150,
       height: 92,
@@ -1831,6 +1839,493 @@ class _HomeShellState extends State<HomeShell> {
   }
 }
 
+
+// ====================== FORM ASSIGNMENT =====================
+/// Full campus service request form required for the Form assignment.
+/// It keeps the existing Scaffold + Container design and adds a real
+/// validated Form with multiple control types.
+class CampusServiceRequestPage extends StatefulWidget {
+  const CampusServiceRequestPage({super.key});
+
+  @override
+  State<CampusServiceRequestPage> createState() => _CampusServiceRequestPageState();
+}
+
+class _CampusServiceRequestPageState extends State<CampusServiceRequestPage> {
+  // Form state lets Submit validate every field before saving the request.
+  final _formKey = GlobalKey<FormState>();
+
+  // Controllers are used for text fields and are disposed in dispose().
+  final _name = TextEditingController(text: 'Viknesh Sreedevi');
+  final _studentId = TextEditingController(text: '23BBTCS199');
+  final _email = TextEditingController(text: 'viknesh.s@cmr.edu.in');
+  final _phone = TextEditingController();
+  final _subject = TextEditingController();
+  final _description = TextEditingController();
+  final _dateController = TextEditingController();
+
+  String? _category;
+  String? _urgency;
+  String? _contactMethod;
+  DateTime? _preferredDate;
+  bool _declaration = false;
+
+  static const _categories = <String>[
+    'Academic Support',
+    'Library Services',
+    'IT / Technical Support',
+    'Hostel / Accommodation',
+    'Campus Facilities',
+    'Student Affairs',
+  ];
+
+  static const _urgencies = <String>['Low', 'Medium', 'High'];
+  static const _contacts = <String>['Campus Email', 'Phone Call', 'WhatsApp'];
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _studentId.dispose();
+    _email.dispose();
+    _phone.dispose();
+    _subject.dispose();
+    _description.dispose();
+    _dateController.dispose();
+    super.dispose();
+  }
+
+  String? _required(String? value, String label) {
+    if (value == null || value.trim().isEmpty) return 'Please enter $label.';
+    if (label == 'your name' && value.trim().split(RegExp(r'\s+')).length < 2) {
+      return 'Enter your full name (first and last name).';
+    }
+    return null;
+  }
+
+  // Student ID customization: CMRU IDs accept a simple alphanumeric campus format.
+  String? _validateStudentId(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Please enter your Student ID.';
+    if (!RegExp(r'^[A-Za-z0-9]{6,20}$').hasMatch(value.trim())) {
+      return 'Use your CMRU Student ID (6–20 letters/numbers).';
+    }
+    return null;
+  }
+
+  // Campus email customization: only the chosen CMRU domain is accepted.
+  String? _validateEmail(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Please enter your campus email.';
+    final email = value.trim().toLowerCase();
+    if (!RegExp(r'^[a-z0-9._%+\-]+@cmr\.edu\.in$').hasMatch(email)) {
+      return 'Use your CMRU email, for example name@cmr.edu.in.';
+    }
+    return null;
+  }
+
+  String? _validatePhone(String? value) {
+    if (value == null || value.trim().isEmpty) return null; // optional field
+    if (!RegExp(r'^\+?[0-9 ]{10,15}$').hasMatch(value.trim())) {
+      return 'Use 10–15 digits, with an optional + prefix.';
+    }
+    return null;
+  }
+
+  String? _validateDescription(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Please describe your request.';
+    if (value.trim().length < 20) return 'Please enter at least 20 characters.';
+    return null;
+  }
+
+  // Date constraint: the picker itself prevents selecting a past date.
+  Future<void> _pickDate() async {
+    final today = DateTime.now();
+    final first = DateTime(today.year, today.month, today.day);
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: first,
+      lastDate: DateTime(today.year + 1, 12, 31),
+      initialDate: _preferredDate != null && !_preferredDate!.isBefore(first) ? _preferredDate! : first,
+      helpText: 'Choose your preferred contact date',
+    );
+    if (picked != null) {
+      setState(() {
+        _preferredDate = picked;
+        _dateController.text = _dateText();
+      });
+    }
+  }
+
+  String _dateText() {
+    if (_preferredDate == null) return '';
+    final d = _preferredDate!;
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  }
+
+  void _submit() {
+    // Validate first, then save the complete Form state.
+    if (!_formKey.currentState!.validate()) return;
+    if (_category == null || _urgency == null || _contactMethod == null || _preferredDate == null || !_declaration) {
+      setState(() {}); // refresh selection-control validation messages
+      return;
+    }
+
+    _formKey.currentState!.save();
+    _showSummary();
+  }
+
+  // Reset behaviour: clear both FormState and every selection/date value.
+  void _reset() {
+    // Reset Form fields and every non-text control explicitly.
+    _formKey.currentState?.reset();
+    setState(() {
+      _category = null;
+      _urgency = null;
+      _contactMethod = null;
+      _preferredDate = null;
+      _dateController.clear();
+      _declaration = false;
+    });
+  }
+
+  String _requestReference() {
+    // Generate a simple local reference so the success feedback is useful without a database.
+    final stamp = DateTime.now().millisecondsSinceEpoch.toString();
+    return 'CMRU-${stamp.substring(stamp.length - 6)}';
+  }
+
+  void _showSummary() {
+    // Advanced customization: a submission summary dialog gives visible success feedback.
+    final reference = _requestReference();
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Row(children: [
+          Icon(Icons.check_circle_rounded, color: C.teal, size: 28),
+          SizedBox(width: 10),
+          Expanded(child: Text('Request Submitted', style: T.h2)),
+        ]),
+        content: SingleChildScrollView(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Your campus service request was validated successfully.', style: T.body),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: C.tealLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text('Reference: $reference', style: const TextStyle(fontWeight: FontWeight.w800, color: C.tealDark)),
+            ),
+            const SizedBox(height: 14),
+            _summaryRow('Student', _name.text.trim()),
+            _summaryRow('Service', _category!),
+            _summaryRow('Subject', _subject.text.trim()),
+            _summaryRow('Urgency', _urgency!),
+            _summaryRow('Contact', _contactMethod!),
+            _summaryRow('Preferred date', _dateText()),
+          ]),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            style: FilledButton.styleFrom(backgroundColor: C.teal),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SizedBox(width: 110, child: Text(label, style: T.muted)),
+      Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700, color: C.navy))),
+    ]),
+  );
+
+  InputDecoration _decoration(String label, IconData icon) => InputDecoration(
+    labelText: label,
+    prefixIcon: Icon(icon, color: C.teal),
+    filled: true,
+    fillColor: Colors.white,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: C.border)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: C.border)),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: C.teal, width: 1.8)),
+    errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: C.red)),
+  );
+
+  Widget _selectionError(String message) => Padding(
+    padding: const EdgeInsets.only(left: 12, top: 5),
+    child: Text(message, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12)),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, box) {
+      final pad = box.maxWidth >= 700 ? 24.0 : 16.0;
+      final wide = box.maxWidth >= 820;
+
+      return ListView(
+        padding: EdgeInsets.fromLTRB(pad, pad, pad, 110),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        children: [
+          Row(children: [
+            iconBox(Icons.assignment_rounded, size: 52),
+            const SizedBox(width: 14),
+            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Campus Service Request', style: T.h1),
+              SizedBox(height: 4),
+              Text('Fill in the details below and submit your request to Student Services.', style: T.muted),
+            ])),
+          ]),
+          const SizedBox(height: 18),
+          Form(
+            key: _formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _formSection('Student Details', Icons.person_rounded, [
+                if (wide)
+                  Row(children: [
+                    Expanded(child: CampusTextField(controller: _name, label: 'Student Name', icon: Icons.person_outline_rounded, validator: (v) => _required(v, 'your name'))),
+                    const SizedBox(width: 12),
+                    Expanded(child: CampusTextField(controller: _studentId, label: 'Student ID', icon: Icons.badge_outlined, validator: _validateStudentId)),
+                  ])
+                else ...[
+                  CampusTextField(controller: _name, label: 'Student Name', icon: Icons.person_outline_rounded, validator: (v) => _required(v, 'your name')),
+                  const SizedBox(height: 12),
+                  CampusTextField(controller: _studentId, label: 'Student ID', icon: Icons.badge_outlined, validator: _validateStudentId),
+                ],
+                const SizedBox(height: 12),
+                if (wide)
+                  Row(children: [
+                    Expanded(child: CampusTextField(controller: _email, label: 'Campus Email', icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress, validator: _validateEmail)),
+                    const SizedBox(width: 12),
+                    Expanded(child: CampusTextField(controller: _phone, label: 'Phone (optional)', icon: Icons.phone_outlined, keyboardType: TextInputType.phone, validator: _validatePhone)),
+                  ])
+                else ...[
+                  CampusTextField(controller: _email, label: 'Campus Email', icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress, validator: _validateEmail),
+                  const SizedBox(height: 12),
+                  CampusTextField(controller: _phone, label: 'Phone (optional)', icon: Icons.phone_outlined, keyboardType: TextInputType.phone, validator: _validatePhone),
+                ],
+              ]),
+              const SizedBox(height: 14),
+              _formSection('Request Details', Icons.support_agent_rounded, [
+                CampusDropdown<String>(
+                  value: _category,
+                  label: 'Service Category',
+                  icon: Icons.category_outlined,
+                  items: _categories.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                  onChanged: (v) => setState(() => _category = v),
+                  validator: (v) => v == null ? 'Please select a service category.' : null,
+                ),
+                const SizedBox(height: 12),
+                CampusTextField(controller: _subject, label: 'Request Subject', icon: Icons.subject_rounded, validator: (v) => _required(v, 'a subject')),
+                const SizedBox(height: 12),
+                // Advanced customization 1: live character counter with a 300-character limit.
+                CampusTextField(
+                  controller: _description,
+                  label: 'Request Description',
+                  icon: Icons.notes_rounded,
+                  maxLines: 5,
+                  maxLength: 300,
+                  keyboardType: TextInputType.multiline,
+                  validator: _validateDescription,
+                ),
+                const SizedBox(height: 12),
+                const Text('Urgency', style: TextStyle(fontWeight: FontWeight.w800, color: C.navy)),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 8,
+                  children: _urgencies.map((item) => ChoiceChip(
+                    label: Text(item),
+                    selected: _urgency == item,
+                    onSelected: (_) => setState(() => _urgency = item),
+                    selectedColor: C.tealLight,
+                    labelStyle: TextStyle(fontWeight: FontWeight.w700, color: _urgency == item ? C.tealDark : C.navy),
+                  )).toList(),
+                ),
+                if (_urgency == null) _selectionError('Please choose an urgency level.'),
+              ]),
+              const SizedBox(height: 14),
+              _formSection('Preferences', Icons.tune_rounded, [
+                const Text('Preferred Contact Method', style: TextStyle(fontWeight: FontWeight.w800, color: C.navy)),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  children: _contacts.map((item) => RadioMenuButton<String>(
+                    value: item,
+                    groupValue: _contactMethod,
+                    onChanged: (v) => setState(() => _contactMethod = v),
+                    child: Text(item),
+                  )).toList(),
+                ),
+                if (_contactMethod == null) _selectionError('Please choose a preferred contact method.'),
+                const SizedBox(height: 10),
+                Semantics(
+                  label: 'Preferred date. Select a date for your campus service response.',
+                  button: true,
+                  child: TextFormField(
+                    readOnly: true,
+                    controller: _dateController,
+                    onTap: _pickDate,
+                    decoration: _decoration('Preferred Date', Icons.calendar_month_rounded).copyWith(
+                      hintText: 'Select a date',
+                      suffixIcon: const Icon(Icons.event_available_rounded, color: C.teal),
+                    ),
+                    validator: (_) => _preferredDate == null ? 'Please choose a preferred date.' : null,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text('Past dates are not allowed.', style: T.muted),
+              ]),
+              const SizedBox(height: 14),
+              _formSection('Confirmation', Icons.verified_user_rounded, [
+                Semantics(
+                  label: 'Declaration checkbox. Confirm that the information provided is correct.',
+                  child: CheckboxListTile(
+                    value: _declaration,
+                    onChanged: (v) => setState(() => _declaration = v ?? false),
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: C.teal,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text('I confirm that the information provided is correct.', style: TextStyle(fontWeight: FontWeight.w600, color: C.navy)),
+                    subtitle: !_declaration ? const Text('Required before submitting.', style: TextStyle(color: C.red, fontSize: 12)) : null,
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(child: OutlinedButton.icon(
+                  onPressed: _reset,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Reset'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: const BorderSide(color: C.border),
+                    foregroundColor: C.navy,
+                  ),
+                )),
+                const SizedBox(width: 12),
+                Expanded(flex: 2, child: FilledButton.icon(
+                  onPressed: _submit,
+                  icon: const Icon(Icons.send_rounded),
+                  label: const Text('Submit Request'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                    backgroundColor: C.teal,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                )),
+              ]),
+            ]),
+          ),
+        ],
+      );
+    });
+  }
+
+  // Consistent section decoration groups fields and improves scanning/accessibility.
+  Widget _formSection(String title, IconData icon, List<Widget> children) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: C.border),
+        boxShadow: [BoxShadow(color: C.teal.withOpacity(0.07), blurRadius: 9, offset: const Offset(0, 3))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [iconBox(icon, size: 38), const SizedBox(width: 10), Text(title, style: T.h2)]),
+        const SizedBox(height: 14),
+        ...children,
+      ]),
+    );
+  }
+}
+
+/// Advanced customization 2: reusable TextFormField wrapper used throughout the form.
+class CampusTextField extends StatelessWidget {
+  const CampusTextField({
+    super.key,
+    required this.controller,
+    required this.label,
+    required this.icon,
+    required this.validator,
+    this.keyboardType,
+    this.maxLines = 1,
+    this.maxLength,
+    this.textInputAction,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final String? Function(String?) validator;
+  final TextInputType? keyboardType;
+  final int maxLines;
+  final int? maxLength;
+  final TextInputAction? textInputAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      maxLength: maxLength,
+      validator: validator,
+      // Keep keyboard navigation predictable: Next for single-line fields, Newline for details.
+      textInputAction: textInputAction ?? (maxLines > 1 ? TextInputAction.newline : TextInputAction.next),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: C.teal),
+        filled: true,
+        fillColor: Colors.white,
+        counterText: null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: C.border)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: C.border)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: C.teal, width: 1.8)),
+        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: C.red)),
+      ),
+    );
+  }
+}
+
+/// Reusable dropdown wrapper keeps Form styling consistent.
+class CampusDropdown<T> extends StatelessWidget {
+  const CampusDropdown({super.key, required this.value, required this.label, required this.icon, required this.items, required this.onChanged, required this.validator});
+  final T? value;
+  final String label;
+  final IconData icon;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+  final String? Function(T?) validator;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<T>(
+      value: value,
+      items: items,
+      onChanged: onChanged,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: C.teal),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: C.border)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: C.border)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: C.teal, width: 1.8)),
+      ),
+    );
+  }
+}
+
 // ====================== REUSABLE CONTAINER WIDGET =====================
 /// Reusable campus-service Container.
 ///
@@ -2026,3 +2521,4 @@ class _AddAssignmentDialogState extends State<_AddAssignmentDialog> {
     );
   }
 }
+
