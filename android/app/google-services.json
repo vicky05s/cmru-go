@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "398540718992",
+    "project_id": "cmru-go",
+    "storage_bucket": "cmru-go.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:398540718992:android:a49524df15901cc62ae915",
+        "android_client_info": {
+          "package_name": "com.example.cmru_go"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDxizARQEEbGb-xKcftNHAApstcEmnoPuA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

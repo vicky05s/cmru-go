@@ -1,7 +1,22 @@
-
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-void main() => runApp(CmruGoApp());
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  await FirebaseAuth.instance.signInAnonymously();
+
+  runApp(CmruGoApp());
+}
+
 
 // Global theme state keeps the light/dark choice consistent across routes.
 final ValueNotifier<bool> cmruDarkMode = ValueNotifier<bool>(false);
@@ -2370,6 +2385,7 @@ class CampusServiceRequestPage extends StatefulWidget {
 class _CampusServiceRequestPageState extends State<CampusServiceRequestPage> {
   // Form state lets Submit validate every field before saving the request.
   final _formKey = GlobalKey<FormState>();
+  String? _lastSubmittedRequestId;
 
   // Controllers are used for text fields and are disposed in dispose().
   final _name = TextEditingController(text: 'Viknesh Sreedevi');
@@ -2470,16 +2486,84 @@ class _CampusServiceRequestPageState extends State<CampusServiceRequestPage> {
     return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
   }
 
-  void _submit() {
-    // Validate first, then save the complete Form state.
+
+  Future<void> _submit() async {
+    // Validate all required form fields first.
     if (!_formKey.currentState!.validate()) return;
-    if (_category == null || _urgency == null || _contactMethod == null || _preferredDate == null || !_declaration) {
-      setState(() {}); // refresh selection-control validation messages
+
+    if (_category == null ||
+        _urgency == null ||
+        _contactMethod == null ||
+        _preferredDate == null ||
+        !_declaration) {
+      setState(() {});
       return;
     }
 
     _formKey.currentState!.save();
-    _showSummary();
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        throw Exception('No authenticated user. Please sign in again.');
+      }
+
+      final docRef = await FirebaseFirestore.instance
+          .collection('campusRequests')
+          .add({
+        'ownerUid': user.uid,
+        'studentName': _name.text.trim(),
+        'studentId': _studentId.text.trim(),
+        'email': _email.text.trim(),
+        'phone': _phone.text.trim(),
+        'serviceCategory': _category,
+        'subject': _subject.text.trim(),
+        'description': _description.text.trim(),
+        'urgency': _urgency,
+        'preferredContact': _contactMethod,
+        'preferredDate': Timestamp.fromDate(_preferredDate!),
+        'declaration': _declaration,
+        'status': 'Submitted',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      _lastSubmittedRequestId = docRef.id;
+      if (!mounted) return;
+      setState(() {});
+
+      // Show the existing summary only after Firestore confirms the save.
+      _showSummary();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Request saved successfully. ID: ${docRef.id}'),
+          duration: Duration(seconds: 6),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not save request: $e'),
+          duration: Duration(seconds: 6),
+        ),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>?> _retrieveRequest(String documentId) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('campusRequests')
+        .doc(documentId)
+        .get();
+
+    if (!snapshot.exists) {
+      return null;
+    }
+
+    return snapshot.data();
   }
 
   void _reset() {
@@ -2745,6 +2829,46 @@ class _CampusServiceRequestPageState extends State<CampusServiceRequestPage> {
                 ]),
               ]),
             ),
+            if (_lastSubmittedRequestId != null) ...[
+              SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () async {
+                  try {
+                    final data = await _retrieveRequest(_lastSubmittedRequestId!);
+                    if (!mounted) return;
+
+                    await showDialog<void>(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        title: Text('Retrieved Request'),
+                        content: SingleChildScrollView(
+                          child: Text(
+                            data == null
+                                ? 'Request not found.'
+                                : data.entries
+                                .map((entry) => '${entry.key}: ${entry.value}')
+                                .join('\n\n'),
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            child: Text('Close'),
+                          ),
+                        ],
+                      ),
+                    );
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Retrieval failed: $e')),
+                    );
+                  }
+                },
+                icon: Icon(Icons.search_rounded),
+                label: Text('Retrieve Saved Request'),
+              ),
+            ],
           ],
         );
       }),
@@ -3040,4 +3164,5 @@ class _AddAssignmentDialogState extends State<_AddAssignmentDialog> {
     );
   }
 }
+
 
