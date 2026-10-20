@@ -3255,8 +3255,8 @@ class CampusRequestDetailPage extends StatelessWidget {
 
 
 // ====================== FIRESTORE RECORDS PAGE =====================
-/// Lists the latest five requests owned by the currently signed-in user.
-/// Ownership is enforced by Firestore rules; this page does not read other users' records.
+/// Lists all requests in the shared campusRequests collection, newest first.
+/// Shared reads require Firestore rules that permit this query.
 class CampusRequestRecordsPage extends StatelessWidget {
   const CampusRequestRecordsPage({super.key});
 
@@ -3268,19 +3268,15 @@ class CampusRequestRecordsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Service Requests'),
         backgroundColor: C.teal,
         foregroundColor: Colors.white,
       ),
-      body: user == null
-          ? const Center(child: Text('Please sign in to view your requests.'))
-          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('campusRequests')
-            .where('ownerUid', isEqualTo: user.uid)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
@@ -3304,22 +3300,21 @@ class CampusRequestRecordsPage extends StatelessWidget {
             final bDate = bTime is Timestamp ? bTime.toDate() : DateTime.fromMillisecondsSinceEpoch(0);
             return bDate.compareTo(aDate);
           });
-          final visibleDocs = docs.take(5).toList();
-          if (visibleDocs.isEmpty) {
+          if (docs.isEmpty) {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
-                child: Text('No requests found for this signed-in user yet. Submit requests to populate this page.'),
+                child: Text('No requests have been saved in Firestore yet.'),
               ),
             );
           }
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Text('Showing ${visibleDocs.length} of your saved requests (${docs.length} found).',
+              Text('All saved requests (${docs.length})',
                   style: const TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 12),
-              ...visibleDocs.map((doc) {
+              ...docs.map((doc) {
                 final data = doc.data();
                 final subject = _displayValue(data['subject']);
                 final category = _displayValue(data['serviceCategory']);
