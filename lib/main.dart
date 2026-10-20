@@ -12,7 +12,10 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  await FirebaseAuth.instance.signInAnonymously();
+  // Reuse the existing anonymous account so previously saved requests remain visible.
+  if (FirebaseAuth.instance.currentUser == null) {
+    await FirebaseAuth.instance.signInAnonymously();
+  }
 
   runApp(CmruGoApp());
 }
@@ -2829,46 +2832,23 @@ class _CampusServiceRequestPageState extends State<CampusServiceRequestPage> {
                 ]),
               ]),
             ),
-            if (_lastSubmittedRequestId != null) ...[
-              SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () async {
-                  try {
-                    final data = await _retrieveRequest(_lastSubmittedRequestId!);
-                    if (!mounted) return;
-
-                    await showDialog<void>(
-                      context: context,
-                      builder: (dialogContext) => AlertDialog(
-                        title: Text('Retrieved Request'),
-                        content: SingleChildScrollView(
-                          child: Text(
-                            data == null
-                                ? 'Request not found.'
-                                : data.entries
-                                .map((entry) => '${entry.key}: ${entry.value}')
-                                .join('\n\n'),
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(dialogContext),
-                            child: Text('Close'),
-                          ),
-                        ],
-                      ),
-                    );
-                  } catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Retrieval failed: $e')),
-                    );
-                  }
-                },
-                icon: Icon(Icons.search_rounded),
-                label: Text('Retrieve Saved Request'),
+            SizedBox(height: 12),
+            SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CampusRequestRecordsPage()),
+                ),
+                icon: Icon(Icons.history_rounded),
+                label: Text('Retrieve Stored Requests'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: C.teal,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
               ),
-            ],
+            ),
           ],
         );
       }),
@@ -3166,3 +3146,216 @@ class _AddAssignmentDialogState extends State<_AddAssignmentDialog> {
 }
 
 
+
+
+
+// ====================== REQUEST DETAILS PAGE =====================
+/// Full-page view for one stored Firestore request.
+class CampusRequestDetailPage extends StatelessWidget {
+  const CampusRequestDetailPage({
+    super.key,
+    required this.documentId,
+    this.initialData,
+  });
+
+  final String documentId;
+  final Map<String, dynamic>? initialData;
+
+  String _displayValue(dynamic value) {
+    if (value == null) return 'Not provided';
+    if (value is Timestamp) {
+      return value.toDate().toLocal().toString().split('.').first;
+    }
+    return value.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Request Details'),
+        backgroundColor: C.teal,
+        foregroundColor: Colors.white,
+      ),
+      body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        future: FirebaseFirestore.instance.collection('campusRequests').doc(documentId).get(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Center(child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('Could not load this request. Check your connection or access permissions.'),
+            ));
+          }
+          if (snapshot.connectionState == ConnectionState.waiting && initialData == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final data = snapshot.data?.data() ?? initialData;
+          if (data == null) return const Center(child: Text('Request not found.'));
+
+          final fields = <(String, String, IconData)>[
+            ('Student Name', _displayValue(data['studentName']), Icons.person_outline),
+            ('Student ID', _displayValue(data['studentId']), Icons.badge_outlined),
+            ('Service', _displayValue(data['serviceCategory']), Icons.category_outlined),
+            ('Subject', _displayValue(data['subject']), Icons.subject_outlined),
+            ('Description', _displayValue(data['description']), Icons.notes_outlined),
+            ('Urgency', _displayValue(data['urgency']), Icons.flag_outlined),
+            ('Preferred Contact', _displayValue(data['preferredContact']), Icons.contact_support_outlined),
+            ('Preferred Date', _displayValue(data['preferredDate']), Icons.calendar_month_outlined),
+            ('Status', _displayValue(data['status']), Icons.check_circle_outline),
+            ('Submitted', _displayValue(data['createdAt']), Icons.access_time),
+          ];
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: C.teal.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Service request', style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Text(_displayValue(data['subject']), style: const TextStyle(fontSize: 16)),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    const Icon(Icons.circle, size: 10, color: Colors.green),
+                    const SizedBox(width: 8),
+                    Text(_displayValue(data['status']), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ]),
+                ]),
+              ),
+              const SizedBox(height: 14),
+              ...fields.where((field) => field.$2 != 'Not provided').map((field) => Card(
+                elevation: 0,
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(color: C.border),
+                ),
+                child: ListTile(
+                  leading: Icon(field.$3, color: C.teal),
+                  title: Text(field.$1, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: SelectableText(field.$2, style: const TextStyle(fontSize: 15)),
+                  ),
+                ),
+              )),
+              const SizedBox(height: 8),
+              Text('Reference ID: $documentId', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+
+// ====================== FIRESTORE RECORDS PAGE =====================
+/// Lists the latest five requests owned by the currently signed-in user.
+/// Ownership is enforced by Firestore rules; this page does not read other users' records.
+class CampusRequestRecordsPage extends StatelessWidget {
+  const CampusRequestRecordsPage({super.key});
+
+  String _displayValue(dynamic value) {
+    if (value == null) return 'Not provided';
+    if (value is Timestamp) return value.toDate().toLocal().toString().split('.').first;
+    return value.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Service Requests'),
+        backgroundColor: C.teal,
+        foregroundColor: Colors.white,
+      ),
+      body: user == null
+          ? const Center(child: Text('Please sign in to view your requests.'))
+          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('campusRequests')
+            .where('ownerUid', isEqualTo: user.uid)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('Could not load requests. Check your connection and Firestore rules.\n\n${snapshot.error}'),
+              ),
+            );
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final docs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
+            snapshot.data?.docs ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[],
+          );
+          docs.sort((a, b) {
+            final aTime = a.data()['createdAt'];
+            final bTime = b.data()['createdAt'];
+            final aDate = aTime is Timestamp ? aTime.toDate() : DateTime.fromMillisecondsSinceEpoch(0);
+            final bDate = bTime is Timestamp ? bTime.toDate() : DateTime.fromMillisecondsSinceEpoch(0);
+            return bDate.compareTo(aDate);
+          });
+          final visibleDocs = docs.take(5).toList();
+          if (visibleDocs.isEmpty) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('No requests found for this signed-in user yet. Submit requests to populate this page.'),
+              ),
+            );
+          }
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text('Showing ${visibleDocs.length} of your saved requests (${docs.length} found).',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              ...visibleDocs.map((doc) {
+                final data = doc.data();
+                final subject = _displayValue(data['subject']);
+                final category = _displayValue(data['serviceCategory']);
+                final status = _displayValue(data['status']);
+                final student = _displayValue(data['studentName']);
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: C.teal,
+                      foregroundColor: Colors.white,
+                      child: const Icon(Icons.description_outlined),
+                    ),
+                    title: Text(subject, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text('$category • $status\nStudent: $student\nID: ${doc.id}',
+                          maxLines: 4, overflow: TextOverflow.ellipsis),
+                    ),
+                    isThreeLine: true,
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => CampusRequestDetailPage(
+                          documentId: doc.id,
+                          initialData: data,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
