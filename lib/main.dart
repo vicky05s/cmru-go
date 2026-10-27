@@ -791,7 +791,7 @@ class _HomeShellState extends State<HomeShell> {
           padding: EdgeInsets.fromLTRB(20, 16, 12, 12),
           decoration: BoxDecoration(
             color: C.surface,
-            border: Border(bottom: BorderSide(color: C.border)),
+            border: Border(bottom: BorderSide(color: C.border.withOpacity(0.7))),
           ),
           child: FittedBox(
             fit: BoxFit.scaleDown,
@@ -3255,98 +3255,374 @@ class CampusRequestDetailPage extends StatelessWidget {
 
 
 // ====================== FIRESTORE RECORDS PAGE =====================
-/// Lists all requests in the shared campusRequests collection, newest first.
-/// Shared reads require Firestore rules that permit this query.
-class CampusRequestRecordsPage extends StatelessWidget {
+/// Lists and filters all requests in the shared campusRequests collection.
+class CampusRequestRecordsPage extends StatefulWidget {
   const CampusRequestRecordsPage({super.key});
 
-  String _displayValue(dynamic value) {
-    if (value == null) return 'Not provided';
+  @override
+  State<CampusRequestRecordsPage> createState() => _CampusRequestRecordsPageState();
+}
+
+class _CampusRequestRecordsPageState extends State<CampusRequestRecordsPage> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchBy = 'Choose search type';
+  String _category = 'All Categories';
+  String _status = 'All Statuses';
+  String _urgency = 'All Urgencies';
+  DateTime? _fromDate;
+  DateTime? _toDate;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String _value(dynamic value) {
+    if (value == null) return '';
     if (value is Timestamp) return value.toDate().toLocal().toString().split('.').first;
-    return value.toString();
+    if (value is DateTime) return value.toLocal().toString().split('.').first;
+    return value.toString().trim();
+  }
+
+  DateTime? _dateValue(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
+  }
+
+  String _day(DateTime? value) {
+    if (value == null) return 'Any date';
+    return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+  }
+
+  Future<void> _chooseDate({required bool isFrom}) async {
+    final now = DateTime.now();
+    final current = isFrom ? _fromDate : _toDate;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current ?? now,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(now.year + 5),
+      helpText: isFrom ? 'Filter from date' : 'Filter to date',
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isFrom) {
+        _fromDate = DateTime(picked.year, picked.month, picked.day);
+        if (_toDate != null && _toDate!.isBefore(_fromDate!)) _toDate = _fromDate;
+      } else {
+        _toDate = DateTime(picked.year, picked.month, picked.day, 23, 59, 59, 999);
+        if (_fromDate != null && _fromDate!.isAfter(_toDate!)) _fromDate = DateTime(picked.year, picked.month, picked.day);
+      }
+    });
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _searchController.clear();
+      _searchBy = 'Choose search type';
+      _category = 'All Categories';
+      _status = 'All Statuses';
+      _urgency = 'All Urgencies';
+      _fromDate = null;
+      _toDate = null;
+    });
+  }
+
+  Widget _dropdown({
+    required String label,
+    required String value,
+    required List<String> options,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final unique = options.toSet().toList();
+    final safeValue = unique.contains(value) ? value : unique.first;
+    return DropdownButtonFormField<String>(
+      value: safeValue,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: C.surface,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      ),
+      items: unique.map((option) => DropdownMenuItem<String>(
+        value: option,
+        child: Text(option, overflow: TextOverflow.ellipsis),
+      )).toList(),
+      onChanged: onChanged,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Service Requests'),
+        title: const Text('Stored Service Requests'),
         backgroundColor: C.teal,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            tooltip: 'Clear filters',
+            onPressed: _clearFilters,
+            icon: const Icon(Icons.filter_alt_off_rounded),
+          ),
+        ],
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('campusRequests')
-            .snapshots(),
+        stream: FirebaseFirestore.instance.collection('campusRequests').snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text('Could not load requests. Check your connection and Firestore rules.\n\n${snapshot.error}'),
+                child: Text('Could not load requests. Check Firestore rules and connection.\n\n${snapshot.error}'),
               ),
             );
           }
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+
           final docs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(
             snapshot.data?.docs ?? <QueryDocumentSnapshot<Map<String, dynamic>>>[],
           );
           docs.sort((a, b) {
-            final aTime = a.data()['createdAt'];
-            final bTime = b.data()['createdAt'];
-            final aDate = aTime is Timestamp ? aTime.toDate() : DateTime.fromMillisecondsSinceEpoch(0);
-            final bDate = bTime is Timestamp ? bTime.toDate() : DateTime.fromMillisecondsSinceEpoch(0);
-            return bDate.compareTo(aDate);
+            final ad = _dateValue(a.data()['createdAt']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final bd = _dateValue(b.data()['createdAt']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return bd.compareTo(ad);
           });
-          if (docs.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('No requests have been saved in Firestore yet.'),
-              ),
-            );
-          }
-          return ListView(
-            padding: const EdgeInsets.all(16),
+
+          // Build filter choices from the actual saved documents.
+          final categories = <String>{
+            for (final doc in docs)
+              if (_value(doc.data()['serviceCategory']).isNotEmpty) _value(doc.data()['serviceCategory']),
+          }.toList()..sort();
+          final statuses = <String>{
+            for (final doc in docs)
+              if (_value(doc.data()['status']).isNotEmpty) _value(doc.data()['status']),
+          }.toList()..sort();
+          final urgencies = <String>{
+            for (final doc in docs)
+              if (_value(doc.data()['urgency']).isNotEmpty) _value(doc.data()['urgency']),
+          }.toList()..sort();
+
+          final categoryOptions = ['All Categories', ...categories];
+          final statusOptions = ['All Statuses', ...statuses];
+          final urgencyOptions = ['All Urgencies', ...urgencies];
+          final query = _searchController.text.trim().toLowerCase();
+
+          final filtered = docs.where((doc) {
+            final data = doc.data();
+            if (_category != 'All Categories' && _value(data['serviceCategory']) != _category) return false;
+            if (_status != 'All Statuses' && _value(data['status']) != _status) return false;
+            if (_urgency != 'All Urgencies' && _value(data['urgency']) != _urgency) return false;
+            final created = _dateValue(data['createdAt']);
+            if (_fromDate != null && (created == null || created.isBefore(_fromDate!))) return false;
+            if (_toDate != null && (created == null || created.isAfter(_toDate!))) return false;
+            if (query.isNotEmpty) {
+              final searchableFields = <String, String>{
+                'Request ID': doc.id,
+                'Student ID': _value(data['studentId']),
+                'Email': _value(data['email']),
+                'Student Name': _value(data['studentName']),
+                'Subject': _value(data['subject']),
+                'Description': _value(data['description']),
+              };
+              final searchable = _searchBy == 'All fields'
+                  ? searchableFields.values.join(' ')
+                  : (searchableFields[_searchBy] ?? '');
+              if (!searchable.toLowerCase().contains(query)) return false;
+            }
+            return true;
+          }).toList();
+
+          return Column(
             children: [
-              Text('All saved requests (${docs.length})',
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 12),
-              ...docs.map((doc) {
-                final data = doc.data();
-                final subject = _displayValue(data['subject']);
-                final category = _displayValue(data['serviceCategory']);
-                final status = _displayValue(data['status']);
-                final student = _displayValue(data['studentName']);
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: C.teal,
-                      foregroundColor: Colors.white,
-                      child: const Icon(Icons.description_outlined),
-                    ),
-                    title: Text(subject, maxLines: 2, overflow: TextOverflow.ellipsis),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text('$category • $status\nStudent: $student\nID: ${doc.id}',
-                          maxLines: 4, overflow: TextOverflow.ellipsis),
-                    ),
-                    isThreeLine: true,
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => CampusRequestDetailPage(
-                          documentId: doc.id,
-                          initialData: data,
-                        ),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+                decoration: BoxDecoration(
+                  color: C.mint.withOpacity(0.38),
+                  border: Border(bottom: BorderSide(color: C.border.withOpacity(0.7))),
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1180),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Container(
+                              width: 42, height: 42,
+                              decoration: BoxDecoration(color: C.teal.withOpacity(0.12), borderRadius: BorderRadius.circular(13)),
+                              child: Icon(Icons.manage_search_rounded, color: C.tealDark),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text('Find a request', style: T.h2),
+                              const SizedBox(height: 2),
+                              Text('Search records and narrow results with filters', style: T.muted),
+                            ])),
+                          ]),
+                          const SizedBox(height: 14),
+                          LayoutBuilder(builder: (context, constraints) {
+                            final wideSearch = constraints.maxWidth >= 680;
+                            final selector = _dropdown(
+                              label: 'Search by', value: _searchBy,
+                              options: const ['Choose search type', 'All fields', 'Request ID', 'Student ID', 'Email', 'Student Name', 'Subject', 'Description'],
+                              onChanged: (v) => setState(() { _searchBy = v ?? 'Choose search type'; _searchController.clear(); }),
+                            );
+                            final searchInput = TextField(
+                              controller: _searchController,
+                              onChanged: (_) => setState(() {}),
+                              decoration: InputDecoration(
+                                hintText: _searchBy == 'All fields' ? 'Enter a name, ID, email, subject…' : 'Enter ${_searchBy.toLowerCase()}…',
+                                prefixIcon: const Icon(Icons.search_rounded),
+                                suffixIcon: _searchController.text.isEmpty ? null : IconButton(
+                                  tooltip: 'Clear search',
+                                  onPressed: () { _searchController.clear(); setState(() {}); },
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                                filled: true, fillColor: C.surface,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.border)),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.border)),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: C.teal, width: 1.6)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                              ),
+                            );
+                            if (wideSearch) return Row(children: [Expanded(flex: 2, child: selector), if (_searchBy != 'Choose search type') ...[const SizedBox(width: 12), Expanded(flex: 5, child: searchInput)]]);
+                            return Column(children: [selector, if (_searchBy != 'Choose search type') ...[const SizedBox(height: 10), searchInput]]);
+                          }),
+                          const SizedBox(height: 16),
+                          Align(alignment: Alignment.centerLeft, child: Text('FILTERS', style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w800, color: C.muted))),
+                          const SizedBox(height: 9),
+                          LayoutBuilder(builder: (context, constraints) {
+                            final wide = constraints.maxWidth >= 680;
+                            final fields = <Widget>[
+                              _dropdown(label: 'Category', value: _category, options: categoryOptions,
+                                  onChanged: (v) => setState(() => _category = v ?? 'All Categories')),
+                              _dropdown(label: 'Status', value: _status, options: statusOptions,
+                                  onChanged: (v) => setState(() => _status = v ?? 'All Statuses')),
+                              _dropdown(label: 'Urgency', value: _urgency, options: urgencyOptions,
+                                  onChanged: (v) => setState(() => _urgency = v ?? 'All Urgencies')),
+                            ];
+                            if (!wide) {
+                              return Column(children: [
+                                for (int i = 0; i < fields.length; i++) ...[
+                                  fields[i],
+                                  if (i != fields.length - 1) const SizedBox(height: 10),
+                                ],
+                              ]);
+                            }
+                            return Row(children: [
+                              Expanded(child: fields[0]),
+                              const SizedBox(width: 10),
+                              Expanded(child: fields[1]),
+                              const SizedBox(width: 10),
+                              Expanded(child: fields[2]),
+                            ]);
+                          }),
+                          const SizedBox(height: 10),
+                          LayoutBuilder(builder: (context, constraints) {
+                            final dateFields = Row(children: [
+                              Expanded(child: OutlinedButton.icon(
+                                onPressed: () => _chooseDate(isFrom: true),
+                                icon: const Icon(Icons.calendar_month_outlined),
+                                label: Text('From: ${_day(_fromDate)}', overflow: TextOverflow.ellipsis),
+                              )),
+                              const SizedBox(width: 10),
+                              Expanded(child: OutlinedButton.icon(
+                                onPressed: () => _chooseDate(isFrom: false),
+                                icon: const Icon(Icons.event_outlined),
+                                label: Text('To: ${_day(_toDate)}', overflow: TextOverflow.ellipsis),
+                              )),
+                            ]);
+                            return dateFields;
+                          }),
+                          const SizedBox(height: 12),
+                          Row(children: [
+                            Expanded(child: Text('${filtered.length} matching request${filtered.length == 1 ? '' : 's'}',
+                                style: TextStyle(fontWeight: FontWeight.w800, color: C.tealDark, fontSize: 15))),
+                            TextButton.icon(onPressed: _clearFilters, icon: const Icon(Icons.restart_alt_rounded), label: const Text('Reset')),
+                          ]),
+                        ],
                       ),
                     ),
                   ),
-                );
-              }),
+                ),
+              ),
+              Expanded(
+                child: filtered.isEmpty
+                    ? Center(child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.search_off_rounded, size: 48, color: C.muted),
+                    const SizedBox(height: 10),
+                    Text(docs.isEmpty ? 'No requests have been saved yet.' : 'No requests match these filters.',
+                        style: T.h2, textAlign: TextAlign.center),
+                    const SizedBox(height: 6),
+                    Text('Try changing your search or clearing the filters.', style: T.muted, textAlign: TextAlign.center),
+                  ]),
+                ))
+                    : Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 980),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final doc = filtered[index];
+                        final data = doc.data();
+                        final subject = _value(data['subject']).isEmpty ? 'Untitled request' : _value(data['subject']);
+                        final category = _value(data['serviceCategory']);
+                        final status = _value(data['status']).isEmpty ? 'Unknown status' : _value(data['status']);
+                        final urgency = _value(data['urgency']);
+                        final student = _value(data['studentName']);
+                        final submitted = _value(data['createdAt']);
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            side: BorderSide(color: C.border.withOpacity(0.8)),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            leading: CircleAvatar(
+                              backgroundColor: C.teal.withOpacity(0.12),
+                              foregroundColor: C.tealDark,
+                              child: const Icon(Icons.description_outlined),
+                            ),
+                            title: Text(subject, maxLines: 2, overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w700)),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text([
+                                if (category.isNotEmpty) category,
+                                if (student.isNotEmpty) student,
+                                'Status: $status${urgency.isNotEmpty ? ' • Urgency: $urgency' : ''}',
+                                if (submitted.isNotEmpty) 'Submitted: $submitted',
+                                'Request ID: ${doc.id}',
+                              ].join('\n'), maxLines: 5, overflow: TextOverflow.ellipsis),
+                            ),
+                            isThreeLine: true,
+                            trailing: const Icon(Icons.chevron_right_rounded),
+                            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) => CampusRequestDetailPage(documentId: doc.id, initialData: data),
+                            )),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
             ],
           );
         },
