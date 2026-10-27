@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:flutter/material.dart';
+import 'models/campus_content.dart' as campus_content;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -820,6 +821,24 @@ class _HomeShellState extends State<HomeShell> {
             item(Icons.event_rounded, 'Events', 1),
             item(Icons.menu_book_rounded, 'Courses', 5),
             item(Icons.dashboard_customize_rounded, 'Campus Services', 6),
+            ListTile(
+              leading: Icon(Icons.campaign_rounded, color: C.teal),
+              title: Text('Announcements'),
+              subtitle: Text('Campus updates and bookmarks', style: T.muted),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => AnnouncementsScreen()));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.grid_view_rounded, color: C.teal),
+              title: Text('Services Grid'),
+              subtitle: Text('Browse all campus services', style: T.muted),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => CampusServicesGridScreen()));
+              },
+            ),
             item(Icons.assignment_rounded, 'Service Request Form', 7),
             item(Icons.person_rounded, 'Profile', 2),
             Divider(height: 14, indent: 20, endIndent: 20),
@@ -3629,4 +3648,216 @@ class _CampusRequestRecordsPageState extends State<CampusRequestRecordsPage> {
       ),
     );
   }
+}
+
+
+// ================= CAMPUS CONTENT LISTS AND GRIDS LAB =================
+// All entries below are clearly labelled demonstration data and remain local.
+
+class AnnouncementsScreen extends StatefulWidget {
+  AnnouncementsScreen({super.key});
+
+  @override
+  State<AnnouncementsScreen> createState() => _AnnouncementsScreenState();
+}
+
+class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
+  final Set<String> bookmarkedIds = <String>{};
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Announcements'),
+        actions: [
+          Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: Center(child: Text('${bookmarkedIds.length} saved', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700))),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 960),
+            child: ListView(
+              key: PageStorageKey('campus-announcements-list'),
+              padding: EdgeInsets.all(width < 600 ? 14 : 24),
+              children: [
+                Container(
+                  padding: EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [C.teal.withOpacity(0.14), C.surface]),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: C.border),
+                  ),
+                  child: Row(children: [
+                    Container(width: 48, height: 48, decoration: BoxDecoration(color: C.teal.withOpacity(0.14), borderRadius: BorderRadius.circular(15)), child: Icon(Icons.campaign_rounded, color: C.tealDark, size: 27)),
+                    SizedBox(width: 14),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Campus updates', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: C.navy)),
+                      SizedBox(height: 3),
+                      Text('Demonstration content • Save announcements for quick access', style: TextStyle(color: C.muted, fontSize: 13)),
+                    ])),
+                  ]),
+                ),
+                SizedBox(height: 14),
+                ...campus_content.demoAnnouncements.map((item) {
+                  final saved = bookmarkedIds.contains(item.id);
+                  return Card(
+                    margin: EdgeInsets.only(bottom: 12),
+                    elevation: 0,
+                    color: C.surface,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: BorderSide(color: C.border)),
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.fromLTRB(14, 12, 8, 12),
+                      leading: Container(width: 48, height: 48, decoration: BoxDecoration(color: C.teal.withOpacity(0.12), borderRadius: BorderRadius.circular(14)), child: Icon(item.icon, color: C.tealDark)),
+                      title: Text(item.title, style: TextStyle(fontWeight: FontWeight.w800, color: C.navy)),
+                      subtitle: Padding(
+                        padding: EdgeInsets.only(top: 7),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Wrap(spacing: 8, runSpacing: 5, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                            Container(padding: EdgeInsets.symmetric(horizontal: 9, vertical: 4), decoration: BoxDecoration(color: C.teal.withOpacity(0.10), borderRadius: BorderRadius.circular(20)), child: Text(item.category, style: TextStyle(color: C.tealDark, fontSize: 11, fontWeight: FontWeight.w800))),
+                            Text(item.date, style: TextStyle(color: C.muted, fontSize: 12)),
+                          ]),
+                          SizedBox(height: 7),
+                          Text(item.preview, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.navy, height: 1.35)),
+                          SizedBox(height: 3),
+                          Text('DEMONSTRATION DATA', style: TextStyle(color: C.muted, fontSize: 9, letterSpacing: 1, fontWeight: FontWeight.w800)),
+                        ]),
+                      ),
+                      isThreeLine: true,
+                      trailing: IconButton(
+                        tooltip: saved ? 'Remove bookmark' : 'Bookmark announcement',
+                        icon: Icon(saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: saved ? C.teal : C.muted),
+                        onPressed: () => setState(() {
+                          if (saved) {
+                            bookmarkedIds.remove(item.id);
+                          } else {
+                            bookmarkedIds.add(item.id);
+                          }
+                        }),
+                      ),
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AnnouncementDetailScreen(item: item, isBookmarked: () => bookmarkedIds.contains(item.id), onToggleBookmark: () => setState(() {
+                        if (bookmarkedIds.contains(item.id)) { bookmarkedIds.remove(item.id); } else { bookmarkedIds.add(item.id); }
+                      })))),
+                    ),
+                  );
+                }),
+                SizedBox(height: 24),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AnnouncementDetailScreen extends StatelessWidget {
+  AnnouncementDetailScreen({super.key, required this.item, required this.isBookmarked, required this.onToggleBookmark});
+  final campus_content.Announcement item;
+  final bool Function() isBookmarked;
+  final VoidCallback onToggleBookmark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Announcement details'), actions: [
+        IconButton(tooltip: isBookmarked() ? 'Remove bookmark' : 'Bookmark', icon: Icon(isBookmarked() ? Icons.bookmark_rounded : Icons.bookmark_border_rounded), onPressed: onToggleBookmark),
+      ]),
+      body: Center(child: ConstrainedBox(constraints: BoxConstraints(maxWidth: 820), child: ListView(padding: EdgeInsets.all(22), children: [
+        Container(height: 170, decoration: BoxDecoration(color: C.teal.withOpacity(0.12), borderRadius: BorderRadius.circular(24)), child: Icon(item.icon, size: 72, color: C.tealDark)),
+        SizedBox(height: 22),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          Chip(label: Text(item.category), backgroundColor: C.teal.withOpacity(0.12), side: BorderSide.none),
+          Chip(avatar: Icon(Icons.calendar_month_rounded, size: 17), label: Text(item.date), side: BorderSide(color: C.border)),
+          Chip(label: Text('DEMONSTRATION DATA'), side: BorderSide(color: C.border)),
+        ]),
+        SizedBox(height: 12),
+        Text(item.title, style: TextStyle(fontSize: 28, height: 1.15, fontWeight: FontWeight.w900, color: C.navy)),
+        SizedBox(height: 18),
+        Container(padding: EdgeInsets.all(18), decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: C.border)), child: Text(item.detail, style: TextStyle(fontSize: 16, height: 1.65, color: C.navy))),
+        SizedBox(height: 18),
+        FilledButton.icon(onPressed: onToggleBookmark, icon: Icon(isBookmarked() ? Icons.bookmark_remove_rounded : Icons.bookmark_add_rounded), label: Text(isBookmarked() ? 'Remove bookmark' : 'Save bookmark')),
+      ]))),
+    );
+  }
+}
+
+class CampusServicesGridScreen extends StatelessWidget {
+  CampusServicesGridScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Campus Services')),
+      body: SafeArea(child: Center(child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 1080),
+        child: LayoutBuilder(builder: (context, constraints) {
+          final columns = constraints.maxWidth >= 700 ? 4 : constraints.maxWidth >= 420 ? 3 : 2;
+          return GridView.builder(
+            padding: EdgeInsets.all(20),
+            itemCount: campus_content.demoCampusServices.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, mainAxisSpacing: 14, crossAxisSpacing: 14, childAspectRatio: 1.12),
+            itemBuilder: (context, index) {
+              final service = campus_content.demoCampusServices[index];
+              return InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => CampusServiceInfoScreen(service: service))),
+                child: Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: C.border), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.035), blurRadius: 12, offset: Offset(0, 4))]),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(width: 48, height: 48, decoration: BoxDecoration(color: C.teal.withOpacity(0.12), borderRadius: BorderRadius.circular(15)), child: Icon(service.icon, color: C.tealDark, size: 26)),
+                    Spacer(),
+                    Text(service.label, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: C.navy)),
+                    SizedBox(height: 5),
+                    Text(service.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: C.muted, fontSize: 12, height: 1.3)),
+                    SizedBox(height: 8),
+                    Row(children: [Expanded(child: Text('View details', style: TextStyle(color: C.tealDark, fontWeight: FontWeight.w800, fontSize: 12))), Icon(Icons.arrow_forward_rounded, size: 16, color: C.tealDark)]),
+                  ]),
+                ),
+              );
+            },
+          );
+        }),
+      ))),
+    );
+  }
+}
+
+class CampusServiceInfoScreen extends StatelessWidget {
+  CampusServiceInfoScreen({super.key, required this.service});
+  final campus_content.CampusService service;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(service.label)),
+      body: Center(child: ConstrainedBox(constraints: BoxConstraints(maxWidth: 760), child: ListView(padding: EdgeInsets.all(22), children: [
+        Container(height: 150, decoration: BoxDecoration(color: C.teal.withOpacity(0.12), borderRadius: BorderRadius.circular(24)), child: Icon(service.icon, size: 68, color: C.tealDark)),
+        SizedBox(height: 22),
+        Text(service.destination, style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900, color: C.navy)),
+        SizedBox(height: 8),
+        Text('Demonstration service information', style: TextStyle(color: C.tealDark, fontWeight: FontWeight.w700)),
+        SizedBox(height: 16),
+        Text(service.description, style: TextStyle(fontSize: 16, height: 1.55, color: C.navy)),
+        SizedBox(height: 18),
+        _serviceInfoRow(Icons.location_on_rounded, 'Location', service.location),
+        _serviceInfoRow(Icons.schedule_rounded, 'Hours', service.hours),
+        _serviceInfoRow(Icons.info_outline_rounded, 'Note', 'This is sample information for the campus content lab. Confirm actual service details with the university.'),
+        SizedBox(height: 20),
+        FilledButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Demo action: ${service.label} information selected.'))), icon: Icon(Icons.check_circle_outline_rounded), label: Text('Select this service')),
+      ]))),
+    );
+  }
+
+  Widget _serviceInfoRow(IconData icon, String label, String value) => Container(
+    margin: EdgeInsets.only(bottom: 10), padding: EdgeInsets.all(15),
+    decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.border)),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(icon, color: C.tealDark), SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w700)), SizedBox(height: 4), Text(value, style: TextStyle(color: C.navy, fontWeight: FontWeight.w600, height: 1.4))]))]),
+  );
 }
