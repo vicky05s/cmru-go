@@ -8,17 +8,85 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Start Flutter immediately so Firebase startup failures are shown on-screen
+  // instead of leaving the browser on a blank white page.
+  runApp(const CmruGoBootstrap());
+}
 
-  await Firebase.initializeApp(
+class CmruGoBootstrap extends StatefulWidget {
+  const CmruGoBootstrap({super.key});
+
+  @override
+  State<CmruGoBootstrap> createState() => _CmruGoBootstrapState();
+}
+
+class _CmruGoBootstrapState extends State<CmruGoBootstrap> {
+  late final Future<FirebaseApp> _firebaseInit = Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Reuse the existing anonymous account so previously saved requests remain visible.
-  if (FirebaseAuth.instance.currentUser == null) {
-    await FirebaseAuth.instance.signInAnonymously();
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<FirebaseApp>(
+      future: _firebaseInit,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: Scaffold(
+              backgroundColor: const Color(0xFFF3FAF8),
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 18),
+                    Text('Starting CMRU Go...'),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: Scaffold(
+              backgroundColor: const Color(0xFFF3FAF8),
+              body: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 640),
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.error_outline, color: Colors.red, size: 42),
+                            const SizedBox(height: 12),
+                            const Text('CMRU Go could not connect to Firebase',
+                                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 12),
+                            const Text('Copy this error and send it to me:'),
+                            const SizedBox(height: 8),
+                            SelectableText(snapshot.error.toString()),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+        return CmruGoApp();
+      },
+    );
   }
-
-  runApp(CmruGoApp());
 }
 
 
@@ -107,8 +175,9 @@ class CmruGoApp extends StatelessWidget {
         ),
         themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
         // Dashboard is the bottom route in the Navigator stack.
-        initialRoute: AppRoutes.home,
+        initialRoute: '/',
         routes: {
+          '/': (_) => const LoginSelectionPage(),
           AppRoutes.home: (_) => DashboardScreen(),
           AppRoutes.timetable: (_) => TimetableScreen(),
           AppRoutes.services: (_) => ServicesScreen(),
@@ -143,6 +212,86 @@ class CmruGoApp extends StatelessWidget {
       ),
     );
   }
+}
+
+// ========================= LOGIN EXPERIENCE =========================
+class LoginSelectionPage extends StatelessWidget {
+  const LoginSelectionPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+              colors: [Color(0xFFE9FAF7), Color(0xFFF7FAFF), Color(0xFFEAF1FF)]),
+        ),
+        child: SafeArea(child: Center(child: SingleChildScrollView(
+          padding: const EdgeInsets.all(22),
+          child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1000), child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Container(width: 76, height: 76, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: C.teal.withOpacity(.16), blurRadius: 24, offset: const Offset(0, 8))]), child: Icon(Icons.school_rounded, size: 42, color: C.teal)),
+            const SizedBox(height: 18),
+            Text('CMRU Go', style: TextStyle(fontSize: width < 420 ? 32 : 40, fontWeight: FontWeight.w900, color: const Color(0xFF143C3A), letterSpacing: -.8)),
+            const SizedBox(height: 8),
+            const Text('Your campus. Your community. One place.', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF66817E), fontSize: 15)),
+            const SizedBox(height: 34),
+            const Text('Welcome back', style: TextStyle(fontSize: 25, fontWeight: FontWeight.w800, color: Color(0xFF173333))),
+            const SizedBox(height: 8),
+            const Text('Choose how you would like to continue', style: TextStyle(color: Color(0xFF708484))),
+            const SizedBox(height: 26),
+            LayoutBuilder(builder: (context, constraints) {
+              final cards = [
+                _LoginChoiceCard(icon: Icons.person_rounded, title: 'Student Login', subtitle: 'Explore classes, campus services and facility bookings.', tag: 'STUDENT PORTAL', color: const Color(0xFF00AFA5), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentLoginPage()))),
+                _LoginChoiceCard(icon: Icons.admin_panel_settings_rounded, title: 'Admin / Teacher Login', subtitle: 'Manage subjects, student information and facility requests.', tag: 'STAFF PORTAL', color: const Color(0xFF5367D9), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FacilityAdminLoginPage()))),
+              ];
+              if (constraints.maxWidth > 650) return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: cards[0]), const SizedBox(width: 18), Expanded(child: cards[1])]);
+              return Column(children: [cards[0], const SizedBox(height: 16), cards[1]]);
+            }),
+            const SizedBox(height: 30),
+            const Text('CMR University  •  Bengaluru', style: TextStyle(color: Color(0xFF819491), fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+          )),
+        ))),
+      ),
+    );
+  }
+}
+
+class _LoginChoiceCard extends StatelessWidget {
+  const _LoginChoiceCard({required this.icon, required this.title, required this.subtitle, required this.tag, required this.color, required this.onTap});
+  final IconData icon; final String title, subtitle, tag; final Color color; final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Material(color: Colors.white, borderRadius: BorderRadius.circular(24), child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(24), child: Container(
+    constraints: const BoxConstraints(minHeight: 220), padding: const EdgeInsets.all(24), decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), border: Border.all(color: color.withOpacity(.18)), boxShadow: [BoxShadow(color: color.withOpacity(.07), blurRadius: 22, offset: const Offset(0, 8))]),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Container(width: 54, height: 54, decoration: BoxDecoration(color: color.withOpacity(.11), borderRadius: BorderRadius.circular(17)), child: Icon(icon, color: color, size: 29)), const SizedBox(height: 20), Text(tag, style: TextStyle(color: color, fontSize: 10, letterSpacing: 1.3, fontWeight: FontWeight.w900)), const SizedBox(height: 7), Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF173333))), const SizedBox(height: 7), Text(subtitle, style: const TextStyle(height: 1.45, color: Color(0xFF718481))), const SizedBox(height: 18), Row(children: [Text('Continue', style: TextStyle(color: color, fontWeight: FontWeight.w800)), const SizedBox(width: 7), Icon(Icons.arrow_forward_rounded, color: color, size: 18)])]),
+  )));
+}
+
+class StudentLoginPage extends StatefulWidget {
+  const StudentLoginPage({super.key});
+  @override State<StudentLoginPage> createState() => _StudentLoginPageState();
+}
+class _StudentLoginPageState extends State<StudentLoginPage> {
+  final _id = TextEditingController(); final _password = TextEditingController(); bool _busy = false; bool _hide = true; String? _error;
+  @override void dispose() { _id.dispose(); _password.dispose(); super.dispose(); }
+  Future<void> _login() async {
+    if (_id.text.trim() != 'student' || _password.text != 'student123') { setState(() => _error = 'Incorrect student ID or password.'); return; }
+    setState(() { _busy = true; _error = null; });
+    try {
+      // Demo student credentials map to a Firebase anonymous identity for Firestore ownership.
+      final current = FirebaseAuth.instance.currentUser;
+      if (current == null || !current.isAnonymous) {
+        await FirebaseAuth.instance.signOut();
+        await FirebaseAuth.instance.signInAnonymously();
+      }
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => DashboardScreen()), (route) => false);
+    } on FirebaseAuthException catch (e) { if (mounted) setState(() => _error = e.message ?? 'Student sign-in failed.'); }
+    finally { if (mounted) setState(() => _busy = false); }
+  }
+  @override Widget build(BuildContext context) => Scaffold(backgroundColor: const Color(0xFFF3FAF8), appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0, title: const Text('Student sign in'), leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context))), body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(22), child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 440), child: Container(padding: const EdgeInsets.all(28), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(26), boxShadow: [BoxShadow(color: C.teal.withOpacity(.09), blurRadius: 28, offset: const Offset(0, 10))]), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [Icon(Icons.person_pin_circle_rounded, color: C.teal, size: 48), const SizedBox(height: 12), const Text('Student portal', textAlign: TextAlign.center, style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF173333))), const SizedBox(height: 6), const Text('Sign in with your student credentials', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF708484))), const SizedBox(height: 26), TextField(controller: _id, decoration: const InputDecoration(prefixIcon: Icon(Icons.badge_outlined), labelText: 'Student ID', hintText: 'Enter student ID')), const SizedBox(height: 14), TextField(controller: _password, obscureText: _hide, onSubmitted: (_) => _login(), decoration: InputDecoration(prefixIcon: const Icon(Icons.lock_outline), labelText: 'Password', suffixIcon: IconButton(icon: Icon(_hide ? Icons.visibility_outlined : Icons.visibility_off_outlined), onPressed: () => setState(() => _hide = !_hide)))), if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: TextStyle(color: C.red))), const SizedBox(height: 20), SizedBox(height: 50, child: FilledButton(onPressed: _busy ? null : _login, child: Text(_busy ? 'Signing in...' : 'Sign in'))), const SizedBox(height: 12), const Text('Demo Student ID: student  •  Password: student123', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Color(0xFF819491))) ]))))));
 }
 
 // ============================== MODELS ==============================
@@ -195,7 +344,7 @@ class CampusService {
 /// Route-name constants are used everywhere so registration and navigation
 /// cannot accidentally drift apart.
 class AppRoutes {
-  static const home = '/';
+  static const home = '/dashboard';
   static const timetable = '/timetable';
   static const services = '/services';
   static const events = '/events';
@@ -840,6 +989,15 @@ class _HomeShellState extends State<HomeShell> {
               },
             ),
             item(Icons.assignment_rounded, 'Service Request Form', 7),
+            ListTile(
+              leading: Icon(Icons.meeting_room_rounded, color: C.teal),
+              title: Text('Facility Booking'),
+              subtitle: Text('Reserve campus spaces', style: T.muted),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FacilityBookingPage()));
+              },
+            ),
             item(Icons.person_rounded, 'Profile', 2),
             Divider(height: 14, indent: 20, endIndent: 20),
             extra(Icons.rocket_launch_rounded, 'LEAP', 'Opening LEAP programme.'),
@@ -3859,5 +4017,428 @@ class CampusServiceInfoScreen extends StatelessWidget {
     margin: EdgeInsets.only(bottom: 10), padding: EdgeInsets.all(15),
     decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.border)),
     child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(icon, color: C.tealDark), SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: TextStyle(color: C.muted, fontSize: 12, fontWeight: FontWeight.w700)), SizedBox(height: 4), Text(value, style: TextStyle(color: C.navy, fontWeight: FontWeight.w600, height: 1.4))]))]),
+  );
+}
+
+
+// ======================= FACILITY BOOKING =======================
+// Facility reservations are stored separately from campusRequests.
+const List<String> cmruFacilities = [
+  'Library Discussion Room',
+  'Sports Hall',
+  'Seminar Room',
+  'Music Practice Room',
+];
+const String cmruAdminEmail = 'jjksatoru12@gmail.com';
+
+class FacilityBookingPage extends StatefulWidget {
+  const FacilityBookingPage({super.key});
+  @override
+  State<FacilityBookingPage> createState() => _FacilityBookingPageState();
+}
+
+class _FacilityBookingPageState extends State<FacilityBookingPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _purposeController = TextEditingController();
+  String? _facility = cmruFacilities.first;
+  DateTime? _date;
+  TimeOfDay? _startTime;
+  int _duration = 60;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _purposeController.dispose();
+    super.dispose();
+  }
+
+  DateTime? get _start => _date == null || _startTime == null ? null : DateTime(
+      _date!.year, _date!.month, _date!.day, _startTime!.hour, _startTime!.minute);
+  DateTime? get _end => _start?.add(Duration(minutes: _duration));
+
+  Future<void> _chooseDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date ?? now,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year, now.month, now.day).add(const Duration(days: 30)),
+    );
+    if (picked != null && mounted) setState(() => _date = picked);
+  }
+
+  Future<void> _chooseTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _startTime ?? const TimeOfDay(hour: 8, minute: 0),
+    );
+    if (picked != null && mounted) setState(() => _startTime = picked);
+  }
+
+  void _message(String message, {bool error = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(message), backgroundColor: error ? C.red : C.tealDark));
+  }
+
+  String? _validateBooking() {
+    if (_facility == null || _purposeController.text.trim().isEmpty || _start == null) {
+      return 'Please complete all booking fields.';
+    }
+    final now = DateTime.now();
+    if (!_start!.isAfter(now)) return 'The selected booking time has already passed.';
+    final day = DateTime(_start!.year, _start!.month, _start!.day);
+    final today = DateTime(now.year, now.month, now.day);
+    if (day.isBefore(today) || day.isAfter(today.add(const Duration(days: 30)))) {
+      return 'Choose a date within the next 30 days.';
+    }
+    final opening = DateTime(_start!.year, _start!.month, _start!.day, 8);
+    final closing = DateTime(_start!.year, _start!.month, _start!.day, 22);
+    if (_start!.isBefore(opening) || _end!.isAfter(closing)) {
+      return 'Bookings must be between 8:00 AM and 10:00 PM.';
+    }
+    return null;
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    final validation = _validateBooking();
+    if (validation != null) { _message(validation, error: true); return; }
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirm facility booking'),
+        content: Text('Facility: $_facility\nPurpose: ${_purposeController.text.trim()}\nStart: ${_start!}\nEnd: ${_end!}\n\nSubmit this request for admin approval?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Review')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Confirm')),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    final secondCheck = _validateBooking();
+    if (secondCheck != null) { _message(secondCheck, error: true); return; }
+    setState(() => _saving = true);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw StateError('Please sign in before booking.');
+      // Availability conflict checks must be enforced by a trusted backend, not a student-wide read query.
+      await FirebaseFirestore.instance.collection('facilityBookings').add({
+        'ownerUid': user.uid,
+        'studentName': user.displayName ?? 'Student',
+        'studentEmail': user.email,
+        'facility': _facility,
+        'purpose': _purposeController.text.trim(),
+        'startAt': Timestamp.fromDate(_start!),
+        'endAt': Timestamp.fromDate(_end!),
+        'status': 'Pending',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
+      _purposeController.clear();
+      setState(() { _date = null; _startTime = null; _duration = 60; });
+      _message('Booking request submitted. Waiting for admin approval.');
+    } catch (e) {
+      _message(e is StateError ? e.message : 'Could not submit booking: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  String _dateLabel(DateTime? d) => d == null ? 'Choose date' : '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
+  String _timeLabel(TimeOfDay? t) => t == null ? 'Choose start time' : t.format(context);
+
+  Future<void> _signOut() async {
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginSelectionPage()),
+          (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F8F7),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        elevation: 0,
+        title: const Text('Facility booking', style: TextStyle(fontWeight: FontWeight.w800)),
+        actions: [
+          TextButton.icon(
+            onPressed: _signOut,
+            icon: const Icon(Icons.logout_rounded),
+            label: const Text('Logout'),
+            style: TextButton.styleFrom(foregroundColor: C.tealDark),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 860),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 40),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF087F7B), Color(0xFF10AAA2)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 54, height: 54,
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(.18), borderRadius: BorderRadius.circular(16)),
+                    child: const Icon(Icons.meeting_room_rounded, color: Colors.white, size: 29),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Reserve a campus facility', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+                    SizedBox(height: 5),
+                    Text('Choose a space and send your request for approval.', style: TextStyle(color: Colors.white, height: 1.35)),
+                  ])),
+                ]),
+              ),
+              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerRight,
+                child: OutlinedButton.icon(
+                  onPressed: _signOut,
+                  icon: const Icon(Icons.logout_rounded),
+                  label: const Text('Logout from CMRU Go'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: C.tealDark,
+                    side: const BorderSide(color: Color(0xFFB8D8D2)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: const Color(0xFFDCEAE7)), boxShadow: [BoxShadow(color: const Color(0xFF164C47).withOpacity(.05), blurRadius: 22, offset: const Offset(0, 8))]),
+                child: Form(
+                  key: _formKey,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    const Text('Booking details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF173333))),
+                    const SizedBox(height: 18),
+                    DropdownButtonFormField<String>(
+                      value: _facility,
+                      decoration: const InputDecoration(labelText: 'Select facility', prefixIcon: Icon(Icons.location_city_rounded), border: OutlineInputBorder(), filled: true, fillColor: Color(0xFFF8FBFA)),
+                      items: cmruFacilities.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
+                      onChanged: (v) => setState(() => _facility = v),
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _purposeController, maxLines: 3,
+                      decoration: const InputDecoration(labelText: 'Purpose of booking', hintText: 'Tell us what you plan to use the facility for', prefixIcon: Icon(Icons.edit_note_rounded), border: OutlineInputBorder(), filled: true, fillColor: Color(0xFFF8FBFA), alignLabelWithHint: true),
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Please enter the purpose.' : null,
+                    ),
+                    const SizedBox(height: 14),
+                    LayoutBuilder(builder: (context, constraints) {
+                      final wide = constraints.maxWidth > 520;
+                      final dateButton = OutlinedButton.icon(onPressed: _chooseDate, icon: const Icon(Icons.calendar_month_rounded), label: Text(_dateLabel(_date)), style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52), alignment: Alignment.centerLeft, padding: const EdgeInsets.symmetric(horizontal: 16)));
+                      final timeButton = OutlinedButton.icon(onPressed: _chooseTime, icon: const Icon(Icons.schedule_rounded), label: Text(_timeLabel(_startTime)), style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52), alignment: Alignment.centerLeft, padding: const EdgeInsets.symmetric(horizontal: 16)));
+                      if (wide) return Row(children: [Expanded(child: dateButton), const SizedBox(width: 12), Expanded(child: timeButton)]);
+                      return Column(children: [dateButton, const SizedBox(height: 12), timeButton]);
+                    }),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<int>(
+                      value: _duration,
+                      decoration: const InputDecoration(labelText: 'Duration', prefixIcon: Icon(Icons.timelapse_rounded), border: OutlineInputBorder(), filled: true, fillColor: Color(0xFFF8FBFA)),
+                      items: const [30, 60, 90].map((m) => DropdownMenuItem(value: m, child: Text('$m minutes'))).toList(),
+                      onChanged: (v) => setState(() => _duration = v ?? 60),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(height: 52, child: FilledButton.icon(
+                      onPressed: _saving ? null : _submit,
+                      icon: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.send_rounded),
+                      label: Text(_saving ? 'Submitting request...' : 'Submit booking request'),
+                      style: FilledButton.styleFrom(backgroundColor: C.teal, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))),
+                    )),
+                    const SizedBox(height: 10),
+                    const Text('Your request will remain pending until an administrator reviews it.', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF758985), fontSize: 12)),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 28),
+              Row(children: [
+                const Expanded(child: Text('My booking requests', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: Color(0xFF173333)))),
+                if (uid != null) const Icon(Icons.history_rounded, color: Color(0xFF087F7B)),
+              ]),
+              const SizedBox(height: 12),
+              if (uid == null)
+                const _BookingInfoCard(message: 'Please sign in to view your requests.')
+              else
+                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance.collection('facilityBookings').where('ownerUid', isEqualTo: uid).snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) return const _BookingInfoCard(message: 'Bookings could not be loaded. Check the facilityBookings Firestore rules and make sure student access is enabled.');
+                    if (!snapshot.hasData) return const Padding(padding: EdgeInsets.all(28), child: Center(child: CircularProgressIndicator()));
+                    final docs = snapshot.data!.docs.toList()..sort((a, b) => ((a.data()['startAt'] as Timestamp?) ?? Timestamp(0, 0)).compareTo((b.data()['startAt'] as Timestamp?) ?? Timestamp(0, 0)));
+                    if (docs.isEmpty) return const _BookingInfoCard(message: 'No booking requests yet. Your submitted requests will appear here.');
+                    return Column(children: docs.map((doc) {
+                      final d = doc.data();
+                      final start = (d['startAt'] as Timestamp).toDate();
+                      final end = (d['endAt'] as Timestamp).toDate();
+                      final status = d['status'] as String? ?? 'Pending';
+                      final statusColor = status == 'Approved' ? Colors.green.shade700 : status == 'Rejected' ? C.red : status == 'Cancelled' ? Colors.blueGrey : C.orange;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(17), border: Border.all(color: const Color(0xFFDCEAE7))),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Container(width: 42, height: 42, decoration: BoxDecoration(color: C.teal.withOpacity(.10), borderRadius: BorderRadius.circular(13)), child: Icon(Icons.meeting_room_outlined, color: C.teal)),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(d['facility'] as String? ?? 'Campus facility', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                            const SizedBox(height: 5),
+                            Text('${start.toLocal()} – ${end.toLocal()}', style: const TextStyle(color: Color(0xFF647975), fontSize: 12)),
+                            if ((d['purpose'] as String? ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 5), child: Text(d['purpose'], style: const TextStyle(color: Color(0xFF647975)))),
+                            const SizedBox(height: 8),
+                            Align(alignment: Alignment.centerLeft, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: statusColor.withOpacity(.10), borderRadius: BorderRadius.circular(30)), child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.w800, fontSize: 12)))),
+                          ])),
+                          if (status == 'Pending') IconButton(tooltip: 'Cancel request', onPressed: () async {
+                            try { await doc.reference.update({'status': 'Cancelled', 'cancelledAt': FieldValue.serverTimestamp()}); }
+                            catch (_) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not cancel this request. Check Firestore rules.'))); }
+                          }, icon: const Icon(Icons.close_rounded, color: Colors.redAccent)),
+                        ]),
+                      );
+                    }).toList());
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BookingInfoCard extends StatelessWidget {
+  const _BookingInfoCard({required this.message});
+  final String message;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFDCEAE7))),
+    child: Row(children: [const Icon(Icons.info_outline_rounded, color: Color(0xFF087F7B)), const SizedBox(width: 12), Expanded(child: Text(message, style: const TextStyle(color: Color(0xFF647975), height: 1.4)))]),
+  );
+}
+
+class FacilityAdminLoginPage extends StatefulWidget {
+  const FacilityAdminLoginPage({super.key});
+  @override
+  State<FacilityAdminLoginPage> createState() => _FacilityAdminLoginPageState();
+}
+
+class _FacilityAdminLoginPageState extends State<FacilityAdminLoginPage> {
+  final _email = TextEditingController(text: cmruAdminEmail);
+  final _password = TextEditingController();
+  bool _busy = false;
+  String? _error;
+  @override
+  void dispose() { _email.dispose(); _password.dispose(); super.dispose(); }
+
+  Future<void> _login() async {
+    if (_password.text.isEmpty) { setState(() => _error = 'Enter the admin password.'); return; }
+    setState(() { _busy = true; _error = null; });
+    try {
+      await FirebaseAuth.instance.signOut();
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(email: _email.text.trim(), password: _password.text);
+      final token = await credential.user!.getIdTokenResult(true);
+      if (token.claims?['admin'] != true) {
+        await FirebaseAuth.instance.signOut();
+        throw StateError('This account does not have the admin role.');
+      }
+      if (!mounted) return;
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const FacilityAdminDashboardPage()));
+    } on FirebaseAuthException catch (e) {
+      if (mounted) setState(() => _error = e.message ?? 'Admin sign-in failed.');
+    } catch (e) {
+      if (mounted) setState(() => _error = e is StateError ? e.message : 'Sign-in failed: $e');
+    } finally { if (mounted) setState(() => _busy = false); }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Administrator sign in')),
+      body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 460), child: Padding(padding: const EdgeInsets.all(22), child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.admin_panel_settings, size: 54), const SizedBox(height: 14),
+        TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Admin email')),
+        const SizedBox(height: 12), TextField(controller: _password, obscureText: true, onSubmitted: (_) => _login(), decoration: const InputDecoration(labelText: 'Password')),
+        if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: TextStyle(color: C.red))),
+        const SizedBox(height: 18), SizedBox(width: double.infinity, child: FilledButton(onPressed: _busy ? null : _login, child: Text(_busy ? 'Signing in...' : 'Sign in as admin'))),
+      ])))));
+}
+
+class FacilityAdminDashboardPage extends StatelessWidget {
+  const FacilityAdminDashboardPage({super.key});
+  Future<void> _review(BuildContext context, QueryDocumentSnapshot<Map<String,dynamic>> doc, String status) async {
+    final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+        title: Text('$status booking?'), content: Text('Are you sure you want to $status this facility request?'),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx,false), child: const Text('Back')), FilledButton(onPressed: () => Navigator.pop(ctx,true), child: Text(status))]));
+    if (confirm != true) return;
+    final admin = FirebaseAuth.instance.currentUser;
+    final token = await admin?.getIdTokenResult(true);
+    if (token?.claims?['admin'] != true) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Admin permission is required.'))); return; }
+    await doc.reference.update({'status':status, 'reviewedAt':FieldValue.serverTimestamp(), 'reviewedBy':admin!.uid});
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Facility Booking Admin'), actions: [IconButton(tooltip: 'Sign out', icon: const Icon(Icons.logout), onPressed: () async {
+      await FirebaseAuth.instance.signOut();
+      if (context.mounted) Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginSelectionPage()), (route) => false);
+    })]),
+    body: StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('facilityBookings').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return Center(child: Text('Unable to load bookings: ${snapshot.error}'));
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final docs = snapshot.data!.docs.toList()..sort((a,b) => (b.data()['createdAt'] as Timestamp? ?? Timestamp(0,0)).compareTo(a.data()['createdAt'] as Timestamp? ?? Timestamp(0,0)));
+        return ListView(padding: const EdgeInsets.all(16), children: [
+          Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1080), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Good day, Admin', style: T.h1),
+            const SizedBox(height: 5),
+            Text('Academic overview and campus facility management', style: T.muted),
+            const SizedBox(height: 18),
+            LayoutBuilder(builder: (context, box) {
+              final pending = docs.where((d) => (d.data()['status'] ?? 'Pending') == 'Pending').length;
+              final approved = docs.where((d) => d.data()['status'] == 'Approved').length;
+              final rejected = docs.where((d) => d.data()['status'] == 'Rejected').length;
+              final items = [ ['Total requests', '${docs.length}', Icons.meeting_room_rounded, C.teal], ['Pending review', '$pending', Icons.pending_actions_rounded, C.orange], ['Approved', '$approved', Icons.check_circle_outline_rounded, Colors.green], ['Rejected', '$rejected', Icons.cancel_outlined, C.red] ];
+              return Wrap(spacing: 12, runSpacing: 12, children: items.map((item) => SizedBox(width: box.maxWidth < 560 ? (box.maxWidth - 12) / 2 : (box.maxWidth - 36) / 4, child: Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.border)), child: Row(children: [Icon(item[2] as IconData, color: item[3] as Color, size: 25), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item[1] as String, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)), Text(item[0] as String, style: T.muted, maxLines: 1, overflow: TextOverflow.ellipsis)]))])))).toList());
+            }),
+            const SizedBox(height: 24),
+            Text('Subjects handled', style: T.h2), const SizedBox(height: 10),
+            Wrap(spacing: 10, runSpacing: 10, children: const [
+              'Data Structures & Algorithms', 'Operating Systems', 'Database Management Systems', 'Computer Networks', 'Software Engineering', 'Artificial Intelligence'
+            ].map((subject) => Chip(avatar: Icon(Icons.menu_book_rounded, size: 17, color: Color(0xFF087F7B)), label: Text(subject))).toList()),
+            const SizedBox(height: 22),
+            Text('Student directory', style: T.h2), const SizedBox(height: 8),
+            Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: C.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.border)), child: Row(children: [CircleAvatar(backgroundColor: C.tealLight, child: Icon(Icons.person, color: C.tealDark)), const SizedBox(width: 12), const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Viknesh Sreedevi', style: TextStyle(fontWeight: FontWeight.w800)), Text('23BBTCS199  •  B.Tech CSE  •  Semester 7', style: TextStyle(fontSize: 12, color: Color(0xFF708484)))])), const Icon(Icons.verified_user_outlined, color: Colors.green)])),
+            const SizedBox(height: 24),
+            Text('Facility booking requests', style: T.h2), const SizedBox(height: 8),
+          ]))),
+          if (docs.isEmpty) const Padding(padding: EdgeInsets.all(18), child: Text('No facility booking requests yet.')),
+          ...docs.map((doc) {
+            final d=doc.data(); final start=(d['startAt'] as Timestamp).toDate(); final end=(d['endAt'] as Timestamp).toDate(); final status=d['status'] ?? 'Pending';
+            return Card(color:C.surface, child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
+              Row(children:[Expanded(child: Text(d['facility'] ?? 'Facility', style:T.h2)), Text(status, style:TextStyle(fontWeight:FontWeight.w800,color:status=='Approved'?Colors.green:status=='Rejected'?C.red:C.orange))]),
+              const SizedBox(height:8), Text('Student: ${d['studentName'] ?? 'Student'}'), if (d['studentEmail'] != null) Text('Email: ${d['studentEmail']}'),
+              Text('Purpose: ${d['purpose'] ?? ''}'), Text('Start: $start'), Text('End: $end'),
+              if (status == 'Pending') Row(mainAxisAlignment: MainAxisAlignment.end, children:[TextButton(onPressed:()=>_review(context,doc,'Rejected'), child:const Text('Reject')), const SizedBox(width:8), FilledButton(onPressed:()=>_review(context,doc,'Approved'), child:const Text('Approve'))]),
+            ])));
+          }).toList(),
+        ]);
+      },
+    ),
   );
 }
